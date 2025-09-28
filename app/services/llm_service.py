@@ -1,5 +1,6 @@
 import os
-import google.generativeai as genai
+# Google Gemini disabled - using only Groq
+genai = None
 from groq import Groq
 from typing import Dict, Any, Optional
 from dotenv import load_dotenv
@@ -8,35 +9,28 @@ load_dotenv()
 
 class LLMService:
     def __init__(self):
-        self.google_api_key = os.getenv("GOOGLE_API_KEY")
         self.groq_api_key = os.getenv("GROQ_API_KEY")
         
-        # Initialize Gemini
-        if self.google_api_key:
-            genai.configure(api_key=self.google_api_key)
-            self.gemini_model = genai.GenerativeModel('gemini-pro')
-        
-        # Initialize Groq
+        # Initialize only Groq (Google Gemini disabled)
         if self.groq_api_key:
             self.groq_client = Groq(api_key=self.groq_api_key)
+            print("✅ Groq API initialized successfully")
+        else:
+            self.groq_client = None
+            print("❌ Groq API key not configured")
     
     async def generate_with_gemini(self, prompt: str, **kwargs) -> str:
-        """Generate text using Google Gemini"""
-        try:
-            if not self.google_api_key:
-                raise ValueError("Google API key not configured")
-            
-            response = self.gemini_model.generate_content(prompt)
-            return response.text
-        except Exception as e:
-            print(f"Gemini error: {e}")
-            raise e
+        """Google Gemini disabled - use Groq instead"""
+        raise ValueError("Google Gemini is disabled. Please use Groq API.")
     
     async def generate_with_groq(self, prompt: str, model: str = "llama-3.3-70b-versatile", **kwargs) -> str:
         """Generate text using Groq"""
         try:
             if not self.groq_api_key:
                 raise ValueError("Groq API key not configured")
+            
+            if self.groq_client is None:
+                raise ValueError("Groq client not initialized")
             
             print(f"🚀 Calling Groq API with model: {model}")
             print(f"📝 Prompt length: {len(prompt)} characters")
@@ -45,12 +39,16 @@ class LLMService:
                 messages=[{"role": "user", "content": prompt}],
                 model=model,
                 temperature=0.7,
-                max_tokens=2048,
+                max_tokens=4096,  # Increased for longer responses
                 **kwargs
             )
             
-            content = response.choices[0].message.content
+            if not response.choices or not response.choices[0].message.content:
+                raise Exception("Empty response from Groq API")
+            
+            content = response.choices[0].message.content.strip()
             print(f"✅ Groq API response length: {len(content)} characters")
+            print(f"📝 Response preview: {content[:100]}...")
             return content
             
         except Exception as e:
@@ -70,7 +68,10 @@ class LLMService:
         5. Questions should be relevant to the topic: {topic}
         6. Include a mix of factual and conceptual questions
         
-        Return the questions in JSON format with this structure:
+        IMPORTANT: Return ONLY valid JSON with no additional text, markdown, or explanations.
+        Do not wrap the response in code blocks or add any formatting.
+        
+        Return the questions in this exact JSON format:
         {{
             "questions": [
                 {{
@@ -83,24 +84,41 @@ class LLMService:
         }}
         """
         
-        # Try Groq first (as requested), then fallback to Gemini
+        # Use only Groq (Google Gemini disabled)
         try:
             if self.groq_api_key:
                 print(f"🤖 Using Groq API to generate {num_questions} questions about {topic}")
                 response = await self.generate_with_groq(prompt)
-            elif self.google_api_key:
-                print(f"🤖 Using Gemini API to generate {num_questions} questions about {topic}")
-                response = await self.generate_with_gemini(prompt)
             else:
-                raise ValueError("No LLM API keys configured")
+                raise ValueError("Groq API key not configured. Google Gemini is disabled.")
             
             print(f"✅ LLM Response received: {response[:200]}...")
             
-            # Parse JSON response
+            # Clean and parse JSON response
             import json
-            parsed_response = json.loads(response)
-            print(f"✅ Parsed {len(parsed_response.get('questions', []))} questions from LLM")
-            return parsed_response
+            import re
+            
+            # Remove any markdown code blocks if present
+            cleaned_response = response.strip()
+            if cleaned_response.startswith('```json'):
+                cleaned_response = cleaned_response[7:]  # Remove ```json
+            if cleaned_response.startswith('```'):
+                cleaned_response = cleaned_response[3:]   # Remove ```
+            if cleaned_response.endswith('```'):
+                cleaned_response = cleaned_response[:-3]  # Remove trailing ```
+            
+            cleaned_response = cleaned_response.strip()
+            print(f"🧹 Cleaned response: {cleaned_response[:200]}...")
+            
+            # Try to parse JSON
+            try:
+                parsed_response = json.loads(cleaned_response)
+                print(f"✅ Parsed {len(parsed_response.get('questions', []))} questions from LLM")
+                return parsed_response
+            except json.JSONDecodeError as json_error:
+                print(f"❌ JSON parsing failed: {json_error}")
+                print(f"📝 Raw response: {cleaned_response}")
+                raise Exception(f"Invalid JSON response from LLM: {str(json_error)}")
             
         except Exception as e:
             print(f"❌ Error generating quiz questions with LLM: {e}")
@@ -133,12 +151,10 @@ class LLMService:
         """
         
         try:
-            if self.google_api_key:
-                response = await self.generate_with_gemini(prompt)
-            elif self.groq_api_key:
+            if self.groq_api_key:
                 response = await self.generate_with_groq(prompt)
             else:
-                raise ValueError("No LLM API keys configured")
+                raise ValueError("Groq API key not configured. Google Gemini is disabled.")
             
             import json
             return json.loads(response)
@@ -174,12 +190,10 @@ class LLMService:
         """
         
         try:
-            if self.google_api_key:
-                response = await self.generate_with_gemini(prompt)
-            elif self.groq_api_key:
+            if self.groq_api_key:
                 response = await self.generate_with_groq(prompt)
             else:
-                raise ValueError("No LLM API keys configured")
+                raise ValueError("Groq API key not configured. Google Gemini is disabled.")
             
             import json
             return json.loads(response)
