@@ -1,0 +1,37 @@
+# FastAPI and web framework
+fastapi
+uvicorn[standard]
+python-multipart
+python-jose[cryptography]
+passlib[bcrypt]
+
+# Database - Firebase
+firebase-admin
+firebase
+
+# CrewAI and AI
+crewai
+google-generativeai
+groq
+
+# File processing
+pandas
+openpyxl
+
+# Email
+fastapi-mail
+sendgrid
+
+# YouTube and transcription
+youtube-transcript-api
+pytube
+
+# HTTP requests
+httpx
+requests
+
+# Environment
+python-dotenv
+
+# CORS
+fastapi-cors

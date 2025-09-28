@@ -1,0 +1,167 @@
+generator client {
+  provider = "prisma-client-py"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Admin {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  quizzes Quiz[]
+
+  @@map("admins")
+}
+
+model Student {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  extraInfo String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  quizInvitations QuizInvitation[]
+  quizAnswers     QuizAnswer[]
+  quizResults     QuizResult[]
+  videoSubmission VideoSubmission?
+
+  @@map("students")
+}
+
+model Quiz {
+  id              String   @id @default(cuid())
+  title           String
+  description     String?
+  topic           String
+  difficulty      String
+  timePerQuestion Int
+  questionType    String
+  totalQuestions  Int
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  adminId String
+  admin   Admin  @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  questions   Question[]
+  invitations QuizInvitation[]
+  quizAnswers QuizAnswer[]
+  quizResults QuizResult[]
+
+  @@map("quizzes")
+}
+
+model Question {
+  id            String   @id @default(cuid())
+  questionText  String
+  options       String // ✅ CHANGED FROM Json -> String (store JSON string)
+  correctAnswer String
+  timeLimit     Int
+  order         Int
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  quizId String
+  quiz   Quiz   @relation(fields: [quizId], references: [id], onDelete: Cascade)
+
+  answers QuizAnswer[]
+
+  @@map("questions")
+}
+
+model QuizInvitation {
+  id        String    @id @default(cuid())
+  token     String    @unique
+  isUsed    Boolean   @default(false)
+  sentAt    DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  quizId    String
+  studentId String
+  quiz      Quiz    @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  quizAnswers QuizAnswer[]
+
+  @@unique([quizId, studentId])
+  @@map("quiz_invitations")
+}
+
+model QuizAnswer {
+  id          String   @id @default(cuid())
+  answer      String
+  isCorrect   Boolean?
+  timeSpent   Int
+  submittedAt DateTime @default(now())
+
+  questionId   String
+  studentId    String
+  invitationId String
+  quizId       String
+
+  question   Question       @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  student    Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  invitation QuizInvitation @relation(fields: [invitationId], references: [id], onDelete: Cascade)
+  quiz       Quiz           @relation(fields: [quizId], references: [id], onDelete: Cascade)
+
+  @@unique([questionId, studentId])
+  @@map("quiz_answers")
+}
+
+model VideoSubmission {
+  id          String    @id @default(cuid())
+  videoUrl    String
+  topic       String
+  isProcessed Boolean   @default(false)
+  submittedAt DateTime  @default(now())
+  processedAt DateTime?
+
+  studentId String  @unique
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  transcript VideoTranscript?
+
+  @@map("video_submissions")
+}
+
+model VideoTranscript {
+  id            String   @id @default(cuid())
+  transcript    String
+  wordCount     Int
+  duration      Int
+  topicCoverage Float
+  evaluation    String? // ✅ CHANGED FROM Json -> String (store JSON string)
+  createdAt     DateTime @default(now())
+
+  videoSubmissionId String          @unique
+  videoSubmission   VideoSubmission @relation(fields: [videoSubmissionId], references: [id], onDelete: Cascade)
+
+  @@map("video_transcripts")
+}
+
+model QuizResult {
+  id             String   @id @default(cuid())
+  totalScore     Int
+  totalQuestions Int
+  percentage     Float
+  rank           Int?
+  completedAt    DateTime @default(now())
+
+  quizId    String
+  studentId String
+  quiz      Quiz    @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([quizId, studentId])
+  @@map("quiz_results")
+}
