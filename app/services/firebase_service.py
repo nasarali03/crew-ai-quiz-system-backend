@@ -177,9 +177,19 @@ class FirebaseService:
     async def get_questions_by_quiz(self, quiz_id: str) -> List[Dict[str, Any]]:
         """Get all questions for a quiz"""
         questions = []
-        for doc in self.db.collection('questions').where('quiz_id', '==', quiz_id).order_by('order').stream():
-            questions.append(doc.to_dict())
-        return questions
+        try:
+            # Remove order_by to avoid index requirement, sort in Python instead
+            for doc in self.db.collection('questions').where('quiz_id', '==', quiz_id).stream():
+                question_data = doc.to_dict()
+                question_data['id'] = doc.id
+                questions.append(question_data)
+            
+            # Sort by order field in Python
+            questions.sort(key=lambda x: x.get('order', 0))
+            return questions
+        except Exception as e:
+            print(f"❌ Firebase: Error fetching questions for quiz {quiz_id}: {e}")
+            return []
     
     # Quiz invitation operations
     async def create_quiz_invitation(self, invitation_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -243,10 +253,20 @@ class FirebaseService:
     
     async def get_quiz_results_by_quiz(self, quiz_id: str) -> List[Dict[str, Any]]:
         """Get all results for a quiz"""
-        results = []
-        for doc in self.db.collection('quiz_results').where('quiz_id', '==', quiz_id).order_by('percentage', direction=firestore.Query.DESCENDING).stream():
-            results.append(doc.to_dict())
-        return results
+        try:
+            results = []
+            # Remove order_by to avoid index requirement, sort in Python instead
+            for doc in self.db.collection('quiz_results').where('quiz_id', '==', quiz_id).stream():
+                result_data = doc.to_dict()
+                result_data['id'] = doc.id
+                results.append(result_data)
+            
+            # Sort by percentage in Python (descending order)
+            results.sort(key=lambda x: x.get('percentage', 0), reverse=True)
+            return results
+        except Exception as e:
+            print(f"❌ Firebase: Error fetching results for quiz {quiz_id}: {e}")
+            return []
     
     async def update_quiz_result(self, result_id: str, update_data: Dict[str, Any]) -> bool:
         """Update quiz result"""

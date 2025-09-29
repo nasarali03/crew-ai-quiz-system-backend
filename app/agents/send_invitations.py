@@ -2,11 +2,14 @@ from crewai import Agent, Task, Crew
 from typing import Dict, Any, List
 import secrets
 import os
+import json
 from dotenv import load_dotenv
 from app.services.email_service import EmailService
 from app.services.llm_service import LLMService
+from app.config.crewai_config import configure_crewai_groq
 
 load_dotenv()
+configure_crewai_groq()
 
 class SendInvitationsAgent:
     def __init__(self, db):
@@ -28,13 +31,23 @@ class SendInvitationsAgent:
                 "message": "No students found to send invitations to"
             }
         
-        # Define the Email Invitation Agent
+        # Define the Email Invitation Agent using CrewAI with Groq LLM
         invitation_agent = Agent(
-            role='Email Invitation Specialist',
-            goal='Send personalized quiz invitations to students with clear instructions',
-            backstory="""You are a professional communication specialist who excels at 
-            writing engaging, clear, and personalized emails. You understand how to 
-            motivate students while providing all necessary information.""",
+            role='Educational Communication Specialist',
+            goal='Create personalized, engaging, and professional quiz invitation emails that motivate students to participate',
+            backstory="""You are an expert in educational communication with deep understanding of:
+            - Student psychology and motivation
+            - Professional email writing
+            - Educational engagement strategies
+            - Clear and concise communication
+            - Building excitement for learning activities
+            
+            You excel at writing emails that are:
+            - Personalized and warm
+            - Clear about expectations
+            - Motivating and encouraging
+            - Professional yet friendly
+            - Informative without being overwhelming""",
             verbose=True,
             allow_delegation=False
         )
@@ -57,13 +70,52 @@ class SendInvitationsAgent:
                 }
                 invitation = await firebase_service.create_quiz_invitation(invitation_dict)
                 
-                # Use LLM service to generate personalized email
+                # Use CrewAI to generate personalized email
                 quiz_link = f"{os.getenv('FRONTEND_URL', 'http://localhost:3000')}/quiz/{token}"
-                email_data = await self.llm_service.generate_email_content(
-                    student_name=student['name'],
-                    quiz_title=quiz['title'],
-                    quiz_link=quiz_link
+                
+                # Create a CrewAI Task for email generation
+                email_task = Task(
+                    description=f"""
+                    Create a personalized quiz invitation email for student: {student['name']}
+                    
+                    Quiz Details:
+                    - Title: {quiz['title']}
+                    - Topic: {quiz['topic']}
+                    - Difficulty: {quiz['difficulty']}
+                    - Time per question: {quiz['time_per_question']} seconds
+                    - Total questions: {quiz['total_questions']}
+                    - Quiz link: {quiz_link}
+                    
+                    Email Requirements:
+                    1. Use the student's name: {student['name']}
+                    2. Make it warm and personalized
+                    3. Explain what the quiz is about and why it's important
+                    4. Provide clear instructions on how to take the quiz
+                    5. Include the quiz link prominently
+                    6. End with an encouraging message
+                    7. Keep the tone professional but friendly
+                    8. Make it engaging and motivating
+                    
+                    Return the email in this JSON format:
+                    {{
+                        "subject": "Quiz Invitation - [Quiz Title]",
+                        "body": "HTML email body with personalized content"
+                    }}
+                    """,
+                    agent=invitation_agent,
+                    expected_output="JSON object with subject and body fields for the email"
                 )
+                
+                # Create and execute the CrewAI crew for email generation
+                email_crew = Crew(
+                    agents=[invitation_agent],
+                    tasks=[email_task],
+                    verbose=True
+                )
+                
+                print(f"🤖 Generating personalized email for {student['name']} using CrewAI...")
+                email_result = email_crew.kickoff()
+                email_data = json.loads(str(email_result))
                 
                 # Send the email
                 email_sent = await self.email_service.send_email(

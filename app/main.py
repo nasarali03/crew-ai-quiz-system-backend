@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Import routers
-from app.api import admin, quiz, video, auth, workflow
+from app.api import admin, quiz, video, auth, workflow, crewai, simple_quiz
 from app.database import init_db
 
 # Create FastAPI app
@@ -33,6 +33,8 @@ app.include_router(admin.router, prefix="/api/admin", tags=["Admin"])
 app.include_router(quiz.router, prefix="/api/quiz", tags=["Quiz"])
 app.include_router(video.router, prefix="/api/video", tags=["Video"])
 app.include_router(workflow.router, prefix="/api/workflow", tags=["Workflow"])
+app.include_router(crewai.router, prefix="/api/crewai", tags=["CrewAI"])
+app.include_router(simple_quiz.router, prefix="/api/simple-quiz", tags=["Simple Quiz"])
 
 # Initialize database
 @app.on_event("startup")
@@ -167,6 +169,48 @@ async def clear_all_quizzes():
         return {
             "success": False,
             "message": f"Error clearing quizzes: {str(e)}",
+            "error": str(e)
+        }
+
+@app.post("/api/test-crewai-system")
+async def test_crewai_system():
+    """Test the complete CrewAI system with a sample query"""
+    try:
+        from app.agents.crewai_quiz_system import CrewAIQuizSystem
+        from app.database import get_db
+        
+        print("🧪 Testing complete CrewAI system...")
+        print("=" * 50)
+        
+        db = get_db()
+        crewai_system = CrewAIQuizSystem(db)
+        
+        # Test with a sample query
+        test_query = "Create a medium difficulty quiz about machine learning with 3 questions"
+        
+        print(f"📝 Test Query: {test_query}")
+        print("🤖 Processing through CrewAI system...")
+        
+        result = await crewai_system.process_user_query(
+            user_query=test_query,
+            context={"test": True, "source": "api_test"}
+        )
+        
+        print(f"📋 CrewAI Result: {result}")
+        print("=" * 50)
+        
+        return {
+            "success": True,
+            "message": "CrewAI system test completed successfully",
+            "test_query": test_query,
+            "result": result
+        }
+        
+    except Exception as e:
+        print(f"❌ CrewAI system test failed: {str(e)}")
+        return {
+            "success": False,
+            "message": f"CrewAI system test failed: {str(e)}",
             "error": str(e)
         }
 

@@ -23,7 +23,7 @@ class LLMService:
         """Google Gemini disabled - use Groq instead"""
         raise ValueError("Google Gemini is disabled. Please use Groq API.")
     
-    async def generate_with_groq(self, prompt: str, model: str = "llama-3.3-70b-versatile", **kwargs) -> str:
+    async def generate_with_groq(self, prompt: str, model: str = "llama-3.1-8b-instant", **kwargs) -> str:
         """Generate text using Groq"""
         try:
             if not self.groq_api_key:

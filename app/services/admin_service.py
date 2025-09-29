@@ -128,35 +128,54 @@ class AdminService:
 
     async def get_quiz_results(self, quiz_id: str, admin_id: str) -> List[QuizResultResponse]:
         """Get quiz results and rankings"""
-        # Verify quiz belongs to admin
-        quiz = await self.firebase_service.get_quiz_by_id(quiz_id)
-        if not quiz or quiz['admin_id'] != admin_id:
-            raise ValueError("Quiz not found or access denied")
-        
-        results = await self.firebase_service.get_quiz_results_by_quiz(quiz_id)
-        
-        # Add rankings and get student data
-        ranked_results = []
-        for i, result in enumerate(results, 1):
-            student = await self.firebase_service.get_student_by_id(result['student_id'])
-            if student:
-                ranked_results.append(QuizResultResponse(
-                    id=result['id'],
-                    total_score=result['total_score'],
-                    total_questions=result['total_questions'],
-                    percentage=result['percentage'],
-                    rank=i,
-                    completed_at=result['completed_at'],
-                    student=StudentResponse(
-                        id=student['id'],
-                        name=student['name'],
-                        email=student['email'],
-                        extra_info=student['extra_info'],
-                        created_at=student['created_at']
-                    )
-                ))
-        
-        return ranked_results
+        try:
+            # Verify quiz belongs to admin
+            quiz = await self.firebase_service.get_quiz_by_id(quiz_id)
+            if not quiz:
+                print(f"❌ AdminService: Quiz {quiz_id} not found")
+                return []
+            
+            if quiz.get('admin_id') != admin_id:
+                print(f"❌ AdminService: Access denied for quiz {quiz_id}")
+                return []
+            
+            results = await self.firebase_service.get_quiz_results_by_quiz(quiz_id)
+            
+            if not results:
+                print(f"⚠️ AdminService: No results found for quiz {quiz_id}")
+                return []
+            
+            # Add rankings and get student data
+            ranked_results = []
+            for i, result in enumerate(results, 1):
+                try:
+                    student = await self.firebase_service.get_student_by_id(result['student_id'])
+                    if student:
+                        ranked_results.append(QuizResultResponse(
+                            id=result['id'],
+                            total_score=result['total_score'],
+                            total_questions=result['total_questions'],
+                            percentage=result['percentage'],
+                            rank=i,
+                            completed_at=result['completed_at'],
+                            student=StudentResponse(
+                                id=student['id'],
+                                name=student['name'],
+                                email=student['email'],
+                                extra_info=student['extra_info'],
+                                created_at=student['created_at']
+                            )
+                        ))
+                except Exception as e:
+                    print(f"⚠️ AdminService: Error processing result {result.get('id', 'unknown')}: {e}")
+                    continue
+            
+            print(f"✅ AdminService: Retrieved {len(ranked_results)} results for quiz {quiz_id}")
+            return ranked_results
+            
+        except Exception as e:
+            print(f"❌ AdminService: Error getting results for quiz {quiz_id}: {str(e)}")
+            return []
 
     async def generate_quiz_questions(self, quiz_id: str, admin_id: str) -> Dict[str, Any]:
         """Trigger QuizGenerator agent to create questions"""
@@ -193,6 +212,57 @@ class AdminService:
         result = await send_invitations.send_invitations(quiz)
         
         return result
+
+    async def get_quiz_questions(self, quiz_id: str, admin_id: str) -> List[Dict[str, Any]]:
+        """Get quiz questions for admin view (with correct answers)"""
+        try:
+            # Verify quiz belongs to admin
+            quiz = await self.firebase_service.get_quiz_by_id(quiz_id)
+            if not quiz:
+                print(f"❌ AdminService: Quiz {quiz_id} not found")
+                return []
+            
+            if quiz.get('admin_id') != admin_id:
+                print(f"❌ AdminService: Access denied for quiz {quiz_id}")
+                return []
+            
+            # Get questions from Firebase
+            questions = await self.firebase_service.get_questions_by_quiz(quiz_id)
+            
+            if not questions:
+                print(f"⚠️ AdminService: No questions found for quiz {quiz_id}")
+                return []
+            
+            # Format questions for admin view (include correct answers and explanations)
+            formatted_questions = []
+            for i, question in enumerate(questions, 1):
+                # Ensure all values are JSON serializable
+                formatted_question = {
+                    'id': str(question.get('id', '')),
+                    'question_text': str(question.get('question_text', '')),
+                    'options': [str(opt) for opt in question.get('options', [])],
+                    'correct_answer': str(question.get('correct_answer', '')),
+                    'explanation': str(question.get('explanation', '')),
+                    'question_number': int(i),
+                    'time_limit': int(question.get('time_limit', 60)),
+                    'order': int(question.get('order', i))
+                }
+                
+                # Convert datetime objects to strings if they exist
+                if 'created_at' in question:
+                    formatted_question['created_at'] = str(question['created_at'])
+                if 'updated_at' in question:
+                    formatted_question['updated_at'] = str(question['updated_at'])
+                
+                formatted_questions.append(formatted_question)
+            
+            print(f"✅ AdminService: Retrieved {len(formatted_questions)} questions for quiz {quiz_id}")
+            return formatted_questions
+            
+        except Exception as e:
+            print(f"❌ AdminService: Error getting questions for quiz {quiz_id}: {str(e)}")
+            return []
+
 
     async def export_quiz_results(self, quiz_id: str, admin_id: str) -> Dict[str, Any]:
         """Export quiz results to Excel format"""

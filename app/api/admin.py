@@ -188,3 +188,28 @@ async def update_quiz(
     """Update a quiz"""
     admin_service = AdminService(db)
     return await admin_service.update_quiz(quiz_id, quiz_data, "default-admin-id")
+
+@router.get("/quiz/{quiz_id}/questions")
+async def get_quiz_questions(
+    quiz_id: str,
+    db = Depends(get_db)
+):
+    """Get quiz questions for admin view (with correct answers)"""
+    try:
+        print(f"🔍 API: Getting questions for quiz {quiz_id}")
+        admin_service = AdminService(db)
+        questions = await admin_service.get_quiz_questions(quiz_id, "default-admin-id")
+        
+        if not questions:
+            print(f"⚠️ API: No questions found for quiz {quiz_id}")
+            return []
+        
+        print(f"✅ API: Returning {len(questions)} questions for quiz {quiz_id}")
+        return questions
+        
+    except Exception as e:
+        print(f"❌ API: Error getting questions for quiz {quiz_id}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to get quiz questions: {str(e)}")
+
