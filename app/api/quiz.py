@@ -58,3 +58,27 @@ async def get_quiz_status(
     if not status:
         raise HTTPException(status_code=404, detail="Quiz not found or token invalid")
     return status
+
+@router.get("/debug/invitations")
+async def debug_invitations(db = Depends(get_db)):
+    """Debug endpoint to check all invitations in database"""
+    from app.services.firebase_service import FirebaseService
+    firebase_service = FirebaseService(db)
+    
+    try:
+        # Get all invitations
+        invitations = []
+        for doc in firebase_service.db.collection('quiz_invitations').limit(10).stream():
+            invitation_data = doc.to_dict()
+            invitation_data['id'] = doc.id
+            # Only show first 10 chars of token for security
+            invitation_data['token_preview'] = invitation_data.get('token', '')[:10] + '...'
+            invitation_data.pop('token', None)  # Remove full token
+            invitations.append(invitation_data)
+        
+        return {
+            "total_invitations": len(invitations),
+            "invitations": invitations
+        }
+    except Exception as e:
+        return {"error": str(e)}

@@ -1,4 +1,5 @@
 import pandas as pd
+import os
 from typing import List, Dict, Any
 from datetime import datetime
 from app.models.schemas import (
@@ -176,6 +177,76 @@ class AdminService:
         except Exception as e:
             print(f"❌ AdminService: Error getting results for quiz {quiz_id}: {str(e)}")
             return []
+    
+    async def get_all_quiz_results(self, admin_id: str) -> List[Dict[str, Any]]:
+        """Get all quiz results across all quizzes for an admin"""
+        try:
+            print(f"🔍 AdminService: Fetching all quiz results for admin: {admin_id}")
+            
+            # Get all quiz results from Firebase
+            all_results = await self.firebase_service.get_all_quiz_results()
+            
+            if not all_results:
+                print("⚠️ AdminService: No quiz results found")
+                return []
+            
+            # Enrich results with student and quiz data
+            enriched_results = []
+            for result in all_results:
+                try:
+                    # Get student data
+                    student = await self.firebase_service.get_student_by_id(result['student_id'])
+                    if not student:
+                        print(f"⚠️ AdminService: Student {result['student_id']} not found for result {result['id']}")
+                        continue
+                    
+                    # Get quiz data
+                    quiz = await self.firebase_service.get_quiz_by_id(result['quiz_id'])
+                    if not quiz:
+                        print(f"⚠️ AdminService: Quiz {result['quiz_id']} not found for result {result['id']}")
+                        continue
+                    
+                    # Check if quiz belongs to admin
+                    if quiz.get('admin_id') != admin_id:
+                        print(f"⚠️ AdminService: Quiz {result['quiz_id']} doesn't belong to admin {admin_id}")
+                        continue
+                    
+                    # Format result data
+                    enriched_result = {
+                        'id': result['id'],
+                        'quiz_id': result['quiz_id'],
+                        'student_id': result['student_id'],
+                        'total_score': result.get('total_score', 0),
+                        'total_questions': result.get('total_questions', 0),
+                        'percentage': result.get('percentage', 0),
+                        'rank': result.get('rank'),
+                        'completed_at': result.get('completed_at', result.get('created_at')),
+                        'created_at': result.get('created_at'),
+                        'quiz_title': quiz['title'],
+                        'quiz_topic': quiz['topic'],
+                        'student_name': student['name'],
+                        'student_email': student['email']
+                    }
+                    
+                    enriched_results.append(enriched_result)
+                    
+                except Exception as e:
+                    print(f"⚠️ AdminService: Error processing result {result.get('id', 'unknown')}: {e}")
+                    continue
+            
+            # Sort by percentage (descending) and then by completed_at (descending)
+            enriched_results.sort(key=lambda x: (-x['percentage'], -x['completed_at'].timestamp() if hasattr(x['completed_at'], 'timestamp') else 0))
+            
+            # Add rankings
+            for i, result in enumerate(enriched_results, 1):
+                result['rank'] = i
+            
+            print(f"✅ AdminService: Retrieved {len(enriched_results)} quiz results")
+            return enriched_results
+            
+        except Exception as e:
+            print(f"❌ AdminService: Error getting all quiz results: {str(e)}")
+            return []
 
     async def generate_quiz_questions(self, quiz_id: str, admin_id: str) -> Dict[str, Any]:
         """Trigger QuizGenerator agent to create questions"""
@@ -201,17 +272,35 @@ class AdminService:
         return result
 
     async def send_quiz_invitations(self, quiz_id: str, admin_id: str) -> Dict[str, Any]:
-        """Trigger SendInvitations agent to email students"""
-        # Verify quiz belongs to admin
-        quiz = await self.firebase_service.get_quiz_by_id(quiz_id)
-        if not quiz or quiz['admin_id'] != admin_id:
-            raise ValueError("Quiz not found or access denied")
-        
-        # Initialize SendInvitations agent
-        send_invitations = SendInvitationsAgent(self.db)
-        result = await send_invitations.send_invitations(quiz)
-        
-        return result
+        """Send quiz invitations to all students using Mailtrap"""
+        try:
+            print(f"📧 AdminService: Sending invitations for quiz {quiz_id}")
+            
+            # Verify quiz belongs to admin
+            quiz = await self.firebase_service.get_quiz_by_id(quiz_id)
+            if not quiz or quiz.get('admin_id') != admin_id:
+                print(f"❌ AdminService: Quiz {quiz_id} not found or access denied for admin {admin_id}")
+                return {
+                    "success": False,
+                    "message": "Quiz not found or access denied"
+                }
+            
+            print(f"✅ AdminService: Quiz verified - {quiz['title']}")
+            
+            # Trigger SendInvitations agent with Mailtrap integration
+            from app.agents.send_invitations import SendInvitationsAgent
+            invitation_agent = SendInvitationsAgent(self.db)
+            result = await invitation_agent.send_invitations(quiz)
+            
+            print(f"📧 AdminService: Invitation result - {result['message']}")
+            return result
+            
+        except Exception as e:
+            print(f"❌ AdminService: Error sending invitations: {str(e)}")
+            return {
+                "success": False,
+                "message": f"Failed to send invitations: {str(e)}"
+            }
 
     async def get_quiz_questions(self, quiz_id: str, admin_id: str) -> List[Dict[str, Any]]:
         """Get quiz questions for admin view (with correct answers)"""
@@ -288,6 +377,156 @@ class AdminService:
         if not quiz:
             raise ValueError("Quiz not found")
         return quiz
+
+    async def get_all_invitations(self, admin_id: str) -> List[Dict[str, Any]]:
+        """Get all quiz invitations with student and quiz details"""
+        try:
+            print(f"🔍 AdminService: Fetching invitations for admin: {admin_id}")
+            
+            # Get all invitations from Firebase
+            invitations = await self.firebase_service.get_all_invitations()
+            
+            if not invitations:
+                print("⚠️ AdminService: No invitations found")
+                return []
+            
+            # Enrich invitations with student and quiz data
+            enriched_invitations = []
+            for invitation in invitations:
+                try:
+                    # Get student data
+                    student = await self.firebase_service.get_student_by_id(invitation['student_id'])
+                    if not student:
+                        print(f"⚠️ AdminService: Student {invitation['student_id']} not found for invitation {invitation['id']}")
+                        continue
+                    
+                    # Get quiz data
+                    quiz = await self.firebase_service.get_quiz_by_id(invitation['quiz_id'])
+                    if not quiz:
+                        print(f"⚠️ AdminService: Quiz {invitation['quiz_id']} not found for invitation {invitation['id']}")
+                        continue
+                    
+                    # Check if quiz belongs to admin
+                    if quiz.get('admin_id') != admin_id:
+                        print(f"⚠️ AdminService: Quiz {invitation['quiz_id']} doesn't belong to admin {admin_id}")
+                        continue
+                    
+                    # Create quiz link
+                    frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:3000')
+                    quiz_link = f"{frontend_url}/quiz/{invitation['token']}"
+                    
+                    # Format invitation data
+                    enriched_invitation = {
+                        'id': invitation['id'],
+                        'quiz_id': invitation['quiz_id'],
+                        'student_id': invitation['student_id'],
+                        'token': invitation['token'],
+                        'is_used': invitation.get('is_used', False),
+                        'sent_at': invitation.get('sent_at', invitation.get('created_at')),
+                        'created_at': invitation.get('created_at'),
+                        'quiz_title': quiz['title'],
+                        'quiz_topic': quiz['topic'],
+                        'student_name': student['name'],
+                        'student_email': student['email'],
+                        'quiz_link': quiz_link
+                    }
+                    
+                    enriched_invitations.append(enriched_invitation)
+                    
+                except Exception as e:
+                    print(f"⚠️ AdminService: Error processing invitation {invitation.get('id', 'unknown')}: {e}")
+                    continue
+            
+            print(f"✅ AdminService: Retrieved {len(enriched_invitations)} invitations")
+            return enriched_invitations
+            
+        except Exception as e:
+            print(f"❌ AdminService: Error getting invitations: {str(e)}")
+            return []
+    
+    async def get_invitations_by_quiz(self, quiz_id: str, admin_id: str) -> List[Dict[str, Any]]:
+        """Get invitations for a specific quiz"""
+        try:
+            # Verify quiz belongs to admin
+            quiz = await self.firebase_service.get_quiz_by_id(quiz_id)
+            if not quiz or quiz.get('admin_id') != admin_id:
+                print(f"❌ AdminService: Quiz {quiz_id} not found or access denied")
+                return []
+            
+            invitations = await self.firebase_service.get_invitations_by_quiz(quiz_id)
+            
+            # Enrich with student data
+            enriched_invitations = []
+            for invitation in invitations:
+                try:
+                    student = await self.firebase_service.get_student_by_id(invitation['student_id'])
+                    if student:
+                        frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:3000')
+                        quiz_link = f"{frontend_url}/quiz/{invitation['token']}"
+                        
+                        enriched_invitation = {
+                            'id': invitation['id'],
+                            'quiz_id': invitation['quiz_id'],
+                            'student_id': invitation['student_id'],
+                            'token': invitation['token'],
+                            'is_used': invitation.get('is_used', False),
+                            'sent_at': invitation.get('sent_at', invitation.get('created_at')),
+                            'created_at': invitation.get('created_at'),
+                            'quiz_title': quiz['title'],
+                            'student_name': student['name'],
+                            'student_email': student['email'],
+                            'quiz_link': quiz_link
+                        }
+                        enriched_invitations.append(enriched_invitation)
+                except Exception as e:
+                    print(f"⚠️ AdminService: Error processing invitation {invitation.get('id', 'unknown')}: {e}")
+                    continue
+            
+            return enriched_invitations
+            
+        except Exception as e:
+            print(f"❌ AdminService: Error getting invitations for quiz {quiz_id}: {str(e)}")
+            return []
+    
+    async def mark_invitation_as_used(self, invitation_id: str, admin_id: str) -> bool:
+        """Mark an invitation as used"""
+        try:
+            # Get invitation to verify it belongs to admin's quiz
+            invitation = await self.firebase_service.get_invitation_by_token(invitation_id)
+            if not invitation:
+                print(f"❌ AdminService: Invitation {invitation_id} not found")
+                return False
+            
+            quiz = await self.firebase_service.get_quiz_by_id(invitation['quiz_id'])
+            if not quiz or quiz.get('admin_id') != admin_id:
+                print(f"❌ AdminService: Access denied for invitation {invitation_id}")
+                return False
+            
+            return await self.firebase_service.mark_invitation_as_used(invitation_id)
+            
+        except Exception as e:
+            print(f"❌ AdminService: Error marking invitation as used: {str(e)}")
+            return False
+    
+    async def resend_invitation(self, invitation_id: str, admin_id: str) -> bool:
+        """Resend an invitation"""
+        try:
+            # Get invitation to verify it belongs to admin's quiz
+            invitation = await self.firebase_service.get_invitation_by_token(invitation_id)
+            if not invitation:
+                print(f"❌ AdminService: Invitation {invitation_id} not found")
+                return False
+            
+            quiz = await self.firebase_service.get_quiz_by_id(invitation['quiz_id'])
+            if not quiz or quiz.get('admin_id') != admin_id:
+                print(f"❌ AdminService: Access denied for invitation {invitation_id}")
+                return False
+            
+            return await self.firebase_service.resend_invitation(invitation_id)
+            
+        except Exception as e:
+            print(f"❌ AdminService: Error resending invitation: {str(e)}")
+            return False
 
     async def update_quiz(self, quiz_id: str, quiz_data: QuizCreate, admin_id: str) -> Dict[str, Any]:
         """Update a quiz"""

@@ -27,7 +27,7 @@ class FirebaseService:
     
     async def get_admin_by_email(self, email: str) -> Optional[Dict[str, Any]]:
         """Get admin by email"""
-        admins = self.db.collection('admins').where('email', '==', email).limit(1).stream()
+        admins = self.db.collection('admins').where(filter=firestore.FieldFilter('email', '==', email)).limit(1).stream()
         for admin in admins:
             return admin.to_dict()
         return None
@@ -61,7 +61,7 @@ class FirebaseService:
     
     async def get_student_by_email(self, email: str) -> Optional[Dict[str, Any]]:
         """Get student by email"""
-        students = self.db.collection('students').where('email', '==', email).limit(1).stream()
+        students = self.db.collection('students').where(filter=firestore.FieldFilter('email', '==', email)).limit(1).stream()
         for student in students:
             return student.to_dict()
         return None
@@ -98,14 +98,36 @@ class FirebaseService:
     async def get_quiz_by_id(self, quiz_id: str) -> Optional[Dict[str, Any]]:
         """Get quiz by ID"""
         print(f"🔍 Firebase: Getting quiz with ID: {quiz_id}")
-        quiz_doc = self.db.collection('quizzes').document(quiz_id).get()
-        if quiz_doc.exists:
-            quiz_data = quiz_doc.to_dict()
-            quiz_data['id'] = quiz_doc.id
-            print(f"✅ Firebase: Found quiz: {quiz_data.get('title', 'No title')}")
-            return quiz_data
-        else:
-            print(f"❌ Firebase: Quiz {quiz_id} not found")
+        try:
+            quiz_doc = self.db.collection('quizzes').document(quiz_id).get()
+            if quiz_doc.exists:
+                quiz_data = quiz_doc.to_dict()
+                quiz_data['id'] = quiz_doc.id
+                print(f"✅ Firebase: Found quiz: {quiz_data.get('title', 'No title')}")
+                print(f"   Quiz Topic: {quiz_data.get('topic', 'No topic')}")
+                print(f"   Quiz Difficulty: {quiz_data.get('difficulty', 'No difficulty')}")
+                print(f"   Admin ID: {quiz_data.get('admin_id', 'No admin')}")
+                print(f"   Is Active: {quiz_data.get('is_active', False)}")
+                return quiz_data
+            else:
+                print(f"❌ Firebase: Quiz {quiz_id} not found in 'quizzes' collection")
+                
+                # Debug: Check if any quizzes exist
+                print("🔍 Firebase: Checking all quizzes in database...")
+                quiz_count = 0
+                for doc in self.db.collection('quizzes').limit(5).stream():
+                    quiz_count += 1
+                    quiz_data = doc.to_dict()
+                    print(f"   Found quiz: {doc.id} - {quiz_data.get('title', 'No title')}")
+                
+                if quiz_count == 0:
+                    print("⚠️ Firebase: No quizzes found in database!")
+                else:
+                    print(f"📊 Firebase: Found {quiz_count} quizzes, but not the requested one")
+                
+                return None
+        except Exception as e:
+            print(f"❌ Firebase: Error getting quiz {quiz_id}: {e}")
             return None
     
     async def get_quizzes_by_admin(self, admin_id: str) -> List[Dict[str, Any]]:
@@ -115,7 +137,7 @@ class FirebaseService:
         
         try:
             # Remove the order_by to avoid index requirement for now
-            query = self.db.collection('quizzes').where('admin_id', '==', admin_id)
+            query = self.db.collection('quizzes').where(filter=firestore.FieldFilter('admin_id', '==', admin_id))
             docs = query.stream()
             
             for doc in docs:
@@ -130,6 +152,27 @@ class FirebaseService:
             
         except Exception as e:
             print(f"❌ Firebase error: {e}")
+            
+        return quizzes
+    
+    async def get_all_quizzes(self) -> List[Dict[str, Any]]:
+        """Get all quizzes from database (for testing purposes)"""
+        print("🔍 Firebase: Getting all quizzes from database")
+        quizzes = []
+        
+        try:
+            docs = self.db.collection('quizzes').stream()
+            
+            for doc in docs:
+                quiz_data = doc.to_dict()
+                quiz_data['id'] = doc.id
+                quizzes.append(quiz_data)
+                print(f"📝 Found quiz: {quiz_data.get('title', 'No title')} (ID: {doc.id})")
+            
+            print(f"📊 Firebase: Found {len(quizzes)} total quizzes")
+            
+        except Exception as e:
+            print(f"❌ Firebase error getting all quizzes: {e}")
             
         return quizzes
     
@@ -176,16 +219,22 @@ class FirebaseService:
     
     async def get_questions_by_quiz(self, quiz_id: str) -> List[Dict[str, Any]]:
         """Get all questions for a quiz"""
+        print(f"🔍 Firebase: Getting questions for quiz {quiz_id}")
         questions = []
         try:
-            # Remove order_by to avoid index requirement, sort in Python instead
-            for doc in self.db.collection('questions').where('quiz_id', '==', quiz_id).stream():
+            # Use new Firestore filter syntax to avoid warnings
+            query = self.db.collection('questions').where(filter=firestore.FieldFilter('quiz_id', '==', quiz_id))
+            docs = query.stream()
+            
+            for doc in docs:
                 question_data = doc.to_dict()
                 question_data['id'] = doc.id
                 questions.append(question_data)
+                print(f"   ❓ Found question: {question_data.get('question_text', 'No text')[:50]}...")
             
             # Sort by order field in Python
             questions.sort(key=lambda x: x.get('order', 0))
+            print(f"✅ Firebase: Found {len(questions)} questions for quiz {quiz_id}")
             return questions
         except Exception as e:
             print(f"❌ Firebase: Error fetching questions for quiz {quiz_id}: {e}")
@@ -206,10 +255,22 @@ class FirebaseService:
     
     async def get_invitation_by_token(self, token: str) -> Optional[Dict[str, Any]]:
         """Get invitation by token"""
-        invitations = self.db.collection('quiz_invitations').where('token', '==', token).limit(1).stream()
-        for invitation in invitations:
-            return invitation.to_dict()
-        return None
+        print(f"🔍 Firebase: Looking for invitation with token: {token[:10]}...")
+        try:
+            invitations = self.db.collection('quiz_invitations').where(filter=firestore.FieldFilter('token', '==', token)).limit(1).stream()
+            for invitation in invitations:
+                invitation_data = invitation.to_dict()
+                invitation_data['id'] = invitation.id
+                print(f"✅ Firebase: Found invitation for student {invitation_data.get('student_id', 'Unknown')}")
+                print(f"   Quiz ID: {invitation_data.get('quiz_id', 'Unknown')}")
+                print(f"   Is Used: {invitation_data.get('is_used', False)}")
+                return invitation_data
+            
+            print(f"❌ Firebase: No invitation found for token {token[:10]}...")
+            return None
+        except Exception as e:
+            print(f"❌ Firebase: Error getting invitation by token: {e}")
+            return None
     
     async def update_invitation(self, invitation_id: str, update_data: Dict[str, Any]) -> bool:
         """Update invitation"""
@@ -235,7 +296,7 @@ class FirebaseService:
     async def get_answers_by_invitation(self, invitation_id: str) -> List[Dict[str, Any]]:
         """Get all answers for an invitation"""
         answers = []
-        for doc in self.db.collection('quiz_answers').where('invitation_id', '==', invitation_id).stream():
+        for doc in self.db.collection('quiz_answers').where(filter=firestore.FieldFilter('invitation_id', '==', invitation_id)).stream():
             answers.append(doc.to_dict())
         return answers
     
@@ -256,7 +317,7 @@ class FirebaseService:
         try:
             results = []
             # Remove order_by to avoid index requirement, sort in Python instead
-            for doc in self.db.collection('quiz_results').where('quiz_id', '==', quiz_id).stream():
+            for doc in self.db.collection('quiz_results').where(filter=firestore.FieldFilter('quiz_id', '==', quiz_id)).stream():
                 result_data = doc.to_dict()
                 result_data['id'] = doc.id
                 results.append(result_data)
@@ -305,7 +366,7 @@ class FirebaseService:
     async def get_pending_video_submissions(self) -> List[Dict[str, Any]]:
         """Get all pending video submissions"""
         submissions = []
-        for doc in self.db.collection('video_submissions').where('is_processed', '==', False).stream():
+        for doc in self.db.collection('video_submissions').where(filter=firestore.FieldFilter('is_processed', '==', False)).stream():
             submissions.append(doc.to_dict())
         return submissions
     
@@ -331,7 +392,7 @@ class FirebaseService:
     
     async def get_transcript_by_submission(self, submission_id: str) -> Optional[Dict[str, Any]]:
         """Get transcript by submission ID"""
-        transcripts = self.db.collection('video_transcripts').where('video_submission_id', '==', submission_id).limit(1).stream()
+        transcripts = self.db.collection('video_transcripts').where(filter=firestore.FieldFilter('video_submission_id', '==', submission_id)).limit(1).stream()
         for transcript in transcripts:
             return transcript.to_dict()
         return None
@@ -339,7 +400,7 @@ class FirebaseService:
     async def get_processed_submissions_with_transcripts(self) -> List[Dict[str, Any]]:
         """Get all processed submissions with their transcripts"""
         submissions = []
-        for doc in self.db.collection('video_submissions').where('is_processed', '==', True).stream():
+        for doc in self.db.collection('video_submissions').where(filter=firestore.FieldFilter('is_processed', '==', True)).stream():
             submission_data = doc.to_dict()
             # Get transcript
             transcript = await self.get_transcript_by_submission(doc.id)
@@ -350,3 +411,66 @@ class FirebaseService:
         # Sort by topic coverage
         submissions.sort(key=lambda x: x.get('transcript', {}).get('topic_coverage', 0), reverse=True)
         return submissions
+    
+    # Quiz results operations
+    async def get_all_quiz_results(self) -> List[Dict[str, Any]]:
+        """Get all quiz results"""
+        results = []
+        for doc in self.db.collection('quiz_results').order_by('completed_at', direction=firestore.Query.DESCENDING).stream():
+            result_data = doc.to_dict()
+            result_data['id'] = doc.id
+            results.append(result_data)
+        return results
+    
+    # Quiz invitation operations
+    async def get_all_invitations(self) -> List[Dict[str, Any]]:
+        """Get all quiz invitations"""
+        invitations = []
+        for doc in self.db.collection('quiz_invitations').order_by('created_at', direction=firestore.Query.DESCENDING).stream():
+            invitation_data = doc.to_dict()
+            invitation_data['id'] = doc.id
+            invitations.append(invitation_data)
+        return invitations
+    
+    async def get_invitations_by_quiz(self, quiz_id: str) -> List[Dict[str, Any]]:
+        """Get all invitations for a specific quiz"""
+        invitations = []
+        for doc in self.db.collection('quiz_invitations').where(filter=firestore.FieldFilter('quiz_id', '==', quiz_id)).stream():
+            invitation_data = doc.to_dict()
+            invitation_data['id'] = doc.id
+            invitations.append(invitation_data)
+        return invitations
+    
+    async def get_invitations_by_student(self, student_id: str) -> List[Dict[str, Any]]:
+        """Get all invitations for a specific student"""
+        invitations = []
+        for doc in self.db.collection('quiz_invitations').where(filter=firestore.FieldFilter('student_id', '==', student_id)).stream():
+            invitation_data = doc.to_dict()
+            invitation_data['id'] = doc.id
+            invitations.append(invitation_data)
+        return invitations
+    
+    async def mark_invitation_as_used(self, invitation_id: str) -> bool:
+        """Mark an invitation as used"""
+        try:
+            self.db.collection('quiz_invitations').document(invitation_id).update({
+                'is_used': True,
+                'used_at': datetime.utcnow(),
+                'updated_at': datetime.utcnow()
+            })
+            return True
+        except Exception as e:
+            print(f"Error marking invitation as used: {e}")
+            return False
+    
+    async def resend_invitation(self, invitation_id: str) -> bool:
+        """Resend an invitation (reset sent_at timestamp)"""
+        try:
+            self.db.collection('quiz_invitations').document(invitation_id).update({
+                'sent_at': datetime.utcnow(),
+                'updated_at': datetime.utcnow()
+            })
+            return True
+        except Exception as e:
+            print(f"Error resending invitation: {e}")
+            return False

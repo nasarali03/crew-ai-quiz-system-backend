@@ -125,6 +125,14 @@ async def get_quiz_results(
     admin_service = AdminService(db)
     return await admin_service.get_quiz_results(quiz_id, "default-admin-id")
 
+@router.get("/results")
+async def get_all_results(
+    db = Depends(get_db)
+):
+    """Get all quiz results across all quizzes"""
+    admin_service = AdminService(db)
+    return await admin_service.get_all_quiz_results("default-admin-id")
+ 
 @router.post("/quiz/{quiz_id}/generate-questions")
 async def generate_quiz_questions(
     quiz_id: str,
@@ -160,6 +168,49 @@ async def send_quiz_invitations(
     """Trigger SendInvitations agent to email students"""
     admin_service = AdminService(db)
     return await admin_service.send_quiz_invitations(quiz_id, "default-admin-id")
+
+@router.get("/invitations")
+async def get_invitations(
+    db = Depends(get_db)
+):
+    """Get all quiz invitations with student and quiz details"""
+    admin_service = AdminService(db)
+    return await admin_service.get_all_invitations("default-admin-id")
+
+@router.get("/quiz/{quiz_id}/invitations")
+async def get_quiz_invitations(
+    quiz_id: str,
+    db = Depends(get_db)
+):
+    """Get invitations for a specific quiz"""
+    admin_service = AdminService(db)
+    return await admin_service.get_invitations_by_quiz(quiz_id, "default-admin-id")
+
+@router.put("/invitations/{invitation_id}/mark-used")
+async def mark_invitation_as_used(
+    invitation_id: str,
+    db = Depends(get_db)
+):
+    """Mark an invitation as used"""
+    admin_service = AdminService(db)
+    success = await admin_service.mark_invitation_as_used(invitation_id, "default-admin-id")
+    if success:
+        return {"message": "Invitation marked as used"}
+    else:
+        raise HTTPException(status_code=400, detail="Failed to mark invitation as used")
+
+@router.post("/invitations/{invitation_id}/resend")
+async def resend_invitation(
+    invitation_id: str,
+    db = Depends(get_db)
+):
+    """Resend an invitation"""
+    admin_service = AdminService(db)
+    success = await admin_service.resend_invitation(invitation_id, "default-admin-id")
+    if success:
+        return {"message": "Invitation resent successfully"}
+    else:
+        raise HTTPException(status_code=400, detail="Failed to resend invitation")
 
 @router.get("/quiz/{quiz_id}/export-results")
 async def export_quiz_results(
