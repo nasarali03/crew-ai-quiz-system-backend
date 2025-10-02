@@ -1,6 +1,6 @@
 # CrewAI Quiz System Backend
 
-A comprehensive backend system for automated quiz generation, student management, and video evaluation using CrewAI agents and Firebase.
+A comprehensive backend system for automated quiz generation, student management, and invitation-based quiz taking using CrewAI agents and Firebase.
 
 ## 🚀 Quick Start
 
@@ -12,58 +12,58 @@ A comprehensive backend system for automated quiz generation, student management
 
 2. **Configure environment:**
 
+   Create a `.env` file with your configuration (see Environment Variables section)
+
+3. **Start the server:**
+
    ```bash
-   cp env.example .env
-   # Edit .env with your actual values
+   python run.py
    ```
 
-3. **Run setup:**
+   Or for development:
 
    ```bash
-   python setup.py
-   ```
-
-4. **Start the server:**
-   ```bash
-   python start.py
+   uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
    ```
 
 ## 📋 Features
 
-- **Automated Quiz Generation** using LLM (Gemini/Groq)
-- **Student Management** with Excel import
-- **Email Notifications** with personalized content
-- **Video Processing** with YouTube transcript extraction
-- **AI-Powered Evaluation** using CrewAI agents
+- **Automated Quiz Generation** using CrewAI agents with Groq LLM
+- **Student Management** with Excel import/export
+- **Invitation-Based Quiz System** with unique tokens and snapshots
+- **Email Notifications** with personalized content via Mailtrap/Gmail SMTP
+- **Quiz Version Control** - each invitation preserves quiz/questions at send time
+- **Real-time Results** with comprehensive analytics
 - **Firebase Integration** for scalable data storage
 - **RESTful API** with comprehensive documentation
+- **Admin Dashboard Integration** for complete management
 
 ## 🏗️ Architecture
 
 ### Core Components
 
 - **FastAPI** - Modern Python web framework
-- **Firebase Firestore** - NoSQL database
-- **CrewAI** - AI agent orchestration
-- **Google Gemini** - Primary LLM provider
-- **Groq** - Alternative LLM provider
-- **SendGrid/SMTP** - Email services
+- **Firebase Firestore** - NoSQL database with real-time capabilities
+- **CrewAI** - AI agent orchestration framework
+- **Groq LLM** - Primary language model provider
+- **Mailtrap/Gmail SMTP** - Email delivery services
+- **JWT Authentication** - Secure admin authentication
 
 ### CrewAI Agents
 
-1. **QuizGeneratorAgent** - Generates quiz questions
-2. **SendInvitationsAgent** - Sends personalized emails
-3. **ScoreAndNotifyAgent** - Scores quizzes and notifies students
-4. **ProcessVideoAgent** - Processes video submissions
-5. **FinalVideoRankingAgent** - Ranks videos and notifies winners
+1. **QuizGeneratorAgent** - Generates quiz questions using Groq LLM
+2. **EmailGeneratorAgent** - Creates personalized email templates
+3. **SendInvitationsAgent** - Orchestrates invitation sending with quiz snapshots
+4. **ProcessVideoAgent** - Processes video submissions (future feature)
+5. **FinalVideoRankingAgent** - Ranks videos and notifies winners (future feature)
 
 ### API Endpoints
 
-- **Authentication** - Admin registration and login
-- **Admin Management** - Student and quiz management
-- **Quiz System** - Quiz taking and submission
-- **Video System** - Video submission and processing
-- **Workflow Management** - Automated workflow execution
+- **Authentication** (`/api/auth/`) - Admin registration and login
+- **Admin Management** (`/api/admin/`) - Student and quiz management, results
+- **Quiz System** (`/api/quiz/`) - Token-based quiz access and submission
+- **Simple Quiz** (`/api/simple-quiz/`) - Alternative quiz interface
+- **Video System** (`/api/video/`) - Video submission and processing (future)
 
 ## 📁 Project Structure
 
@@ -71,18 +71,31 @@ A comprehensive backend system for automated quiz generation, student management
 backend/
 ├── app/
 │   ├── agents/           # CrewAI agents
+│   │   ├── quiz_generator.py
+│   │   ├── email_generator.py
+│   │   └── send_invitations.py
 │   ├── api/             # API endpoints
+│   │   ├── auth.py      # Authentication
+│   │   ├── admin.py     # Admin management
+│   │   ├── quiz.py      # Quiz system
+│   │   └── video.py     # Video system
 │   ├── config/          # Configuration
-│   ├── models/          # Data models
+│   │   ├── crewai_config.py
+│   │   └── llm_config.py
+│   ├── models/          # Data models and schemas
+│   │   └── schemas.py
 │   ├── services/        # Business logic
+│   │   ├── firebase_service.py
+│   │   ├── quiz_service.py
+│   │   ├── email_service.py
+│   │   └── auth_service.py
+│   ├── utils/           # Utility functions
 │   ├── workflows/       # Workflow orchestration
 │   ├── database.py      # Database configuration
-│   └── main.py          # FastAPI application
+│   ├── main.py          # FastAPI application
+│   └── serviceAccountKey.json  # Firebase credentials (local only)
 ├── requirements.txt     # Python dependencies
-├── env.example         # Environment variables template
-├── setup.py            # Setup script
-├── start.py            # Startup script
-├── test_backend.py     # Test script
+├── run.py              # Application runner
 └── README.md           # This file
 ```
 
@@ -93,27 +106,45 @@ backend/
 Create a `.env` file with the following variables:
 
 ```env
-# Firebase Configuration
-FIREBASE_CREDENTIALS_PATH=path/to/firebase-service-account.json
+# Firebase Configuration (choose one method)
+# Method 1: Service account file (local development)
+FIREBASE_CREDENTIALS_PATH=app/serviceAccountKey.json
 
-# LLM API Keys
-GOOGLE_API_KEY=your_google_api_key
+# Method 2: Complete JSON (recommended for deployment)
+FIREBASE_CREDENTIALS_JSON={"type":"service_account","project_id":"..."}
+
+# Method 3: Individual variables (alternative for deployment)
+FIREBASE_PROJECT_ID=your_project_id
+FIREBASE_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n
+FIREBASE_CLIENT_EMAIL=firebase-adminsdk-xxx@your-project.iam.gserviceaccount.com
+FIREBASE_CLIENT_ID=your_client_id
+
+# LLM Configuration
 GROQ_API_KEY=your_groq_api_key
 
 # JWT Configuration
-JWT_SECRET=your_jwt_secret
+JWT_SECRET_KEY=your_jwt_secret_key
+JWT_ALGORITHM=HS256
+JWT_EXPIRE_MINUTES=1440
 
-# Email Configuration
-SENDGRID_API_KEY=your_sendgrid_api_key
-# OR SMTP settings
-SMTP_HOST=smtp.gmail.com
+# Email Configuration (choose one)
+# Mailtrap (recommended for testing)
+SMTP_HOST=sandbox.smtp.mailtrap.io
 SMTP_PORT=587
-SMTP_USERNAME=your_email@gmail.com
-SMTP_PASSWORD=your_app_password
+SMTP_USERNAME=your_mailtrap_username
+SMTP_PASSWORD=your_mailtrap_password
+SMTP_FROM_EMAIL=noreply@quizsystem.com
+
+# Gmail SMTP (alternative)
+# SMTP_HOST=smtp.gmail.com
+# SMTP_PORT=587
+# SMTP_USERNAME=your_email@gmail.com
+# SMTP_PASSWORD=your_app_password
+
+# SendGrid (alternative)
+# SENDGRID_API_KEY=your_sendgrid_api_key
 
 # Server Configuration
-HOST=0.0.0.0
-PORT=8000
 FRONTEND_URL=http://localhost:3000
 ```
 
@@ -124,25 +155,47 @@ FRONTEND_URL=http://localhost:3000
 3. Generate service account key
 4. Download JSON file and update `.env`
 
-## 🚀 Running the Backend
+## 🚀 Deployment
 
-### Development Mode
+### Local Development
 
 ```bash
-python start.py
+# Install dependencies
+pip install -r requirements.txt
+
+# Configure environment
+# Create .env file with your configuration
+
+# Run the server
+python run.py
 ```
 
-### Production Mode
+### Vercel Deployment
+
+1. **Set Root Directory**: `backend/`
+2. **Build Command**: `pip install -r requirements.txt`
+3. **Output Directory**: Leave empty
+4. **Install Command**: `pip install -r requirements.txt`
+5. **Development Command**: `python run.py`
+
+**Environment Variables for Vercel:**
+
+```env
+FIREBASE_CREDENTIALS_JSON={"type":"service_account",...}
+GROQ_API_KEY=your_groq_api_key
+JWT_SECRET_KEY=your_jwt_secret
+SMTP_HOST=sandbox.smtp.mailtrap.io
+SMTP_PORT=587
+SMTP_USERNAME=your_mailtrap_username
+SMTP_PASSWORD=your_mailtrap_password
+SMTP_FROM_EMAIL=noreply@quizsystem.com
+FRONTEND_URL=https://your-frontend-domain.vercel.app
+```
+
+### Production Mode (Manual)
 
 ```bash
 uvicorn app.main:app --host 0.0.0.0 --port 8000
-```
-
-### Using Docker
-
-```bash
-docker build -t crewai-quiz-backend .
-docker run -p 8000:8000 crewai-quiz-backend
 ```
 
 ## 📚 API Documentation
@@ -150,14 +203,6 @@ docker run -p 8000:8000 crewai-quiz-backend
 - **Swagger UI**: http://localhost:8000/docs
 - **ReDoc**: http://localhost:8000/redoc
 - **Health Check**: http://localhost:8000/health
-
-## 🧪 Testing
-
-### Run Tests
-
-```bash
-python test_backend.py
-```
 
 ### Test API Endpoints
 
@@ -171,44 +216,84 @@ curl -X POST http://localhost:8000/api/auth/register \
   -d '{"email": "admin@example.com", "password": "password", "name": "Admin"}'
 ```
 
-## 🔄 Workflows
+## 🔄 Quiz Workflow
 
-### Complete Quiz Workflow
+### Complete Quiz Process
 
-1. Generate quiz questions using LLM
-2. Send personalized invitations to students
-3. Wait for quiz completion
-4. Score results and notify top students
-5. Process video submissions
-6. Rank videos and notify winners
+1. **Admin Setup**
+
+   - Register/Login as admin
+   - Upload students via Excel file
+   - Create quiz with topic and settings
+
+2. **Question Generation**
+
+   - Generate questions using CrewAI + Groq LLM
+   - Questions are stored in Firebase
+   - Preview and edit questions if needed
+
+3. **Invitation Process**
+
+   - Send invitations creates quiz/questions snapshots
+   - Each invitation gets unique token
+   - Personalized emails sent via Mailtrap/Gmail
+   - 10-second delay between emails to avoid rate limits
+
+4. **Student Quiz Taking**
+
+   - Students click unique link from email
+   - Quiz loads from invitation snapshot (version control)
+   - Timed questions with progress tracking
+   - Answers submitted and scored
+
+5. **Results & Analytics**
+   - Real-time results in admin dashboard
+   - Student performance analytics
+   - Export capabilities for further analysis
 
 ### API Usage Example
 
 ```python
 import requests
 
-# Register and login
-response = requests.post('http://localhost:8000/api/auth/register', json={
+BASE_URL = "http://localhost:8000"
+
+# 1. Register and login
+response = requests.post(f'{BASE_URL}/api/auth/register', json={
     'email': 'admin@example.com',
-    'password': 'password',
-    'name': 'Admin'
+    'password': 'password123',
+    'name': 'Admin User'
 })
 
-response = requests.post('http://localhost:8000/api/auth/login', data={
+login_response = requests.post(f'{BASE_URL}/api/auth/login', data={
     'username': 'admin@example.com',
-    'password': 'password'
+    'password': 'password123'
 })
-token = response.json()['access_token']
-
-# Create quiz and run workflow
+token = login_response.json()['access_token']
 headers = {'Authorization': f'Bearer {token}'}
-response = requests.post('http://localhost:8000/api/admin/create-quiz',
-                        json={'title': 'Python Quiz', 'topic': 'Python'},
-                        headers=headers)
 
-# Run automated workflow
-response = requests.post(f'http://localhost:8000/api/workflow/quiz/{quiz_id}/run-automated-workflow',
-                        headers=headers)
+# 2. Create quiz
+quiz_response = requests.post(f'{BASE_URL}/api/admin/create-quiz', json={
+    'title': 'Python Fundamentals',
+    'description': 'Basic Python programming concepts',
+    'topic': 'Python Programming',
+    'difficulty': 'medium',
+    'time_per_question': 60,
+    'total_questions': 10
+}, headers=headers)
+quiz_id = quiz_response.json()['id']
+
+# 3. Generate questions
+requests.post(f'{BASE_URL}/api/admin/quiz/{quiz_id}/generate-questions',
+              headers=headers)
+
+# 4. Send invitations (creates snapshots)
+requests.post(f'{BASE_URL}/api/admin/quiz/{quiz_id}/send-invitations',
+              headers=headers)
+
+# 5. Get results
+results = requests.get(f'{BASE_URL}/api/admin/quiz/{quiz_id}/results',
+                      headers=headers)
 ```
 
 ## 🛠️ Development
@@ -231,15 +316,35 @@ response = requests.post(f'http://localhost:8000/api/workflow/quiz/{quiz_id}/run
 
 The system uses Firebase Firestore with these collections:
 
-- `admins` - Admin users
-- `students` - Student information
-- `quizzes` - Quiz configurations
-- `questions` - Quiz questions
-- `quiz_invitations` - Invitation tokens
-- `quiz_answers` - Student answers
-- `quiz_results` - Quiz results
-- `video_submissions` - Video submissions
-- `video_transcripts` - Video transcripts
+#### Core Collections
+
+- **`admins`** - Admin user accounts with authentication
+- **`students`** - Student information imported from Excel
+- **`quizzes`** - Quiz configurations and metadata
+- **`questions`** - Generated quiz questions with answers
+- **`quiz_invitations`** - Enhanced invitations with snapshots
+  ```json
+  {
+    "quiz_id": "quiz-uuid",
+    "student_id": "student-uuid",
+    "token": "unique-token",
+    "is_used": false,
+    "quiz_snapshot": {
+      /* complete quiz data */
+    },
+    "questions_snapshot": [
+      /* all questions */
+    ],
+    "invitation_created_at": "2024-01-01T00:00:00Z"
+  }
+  ```
+- **`quiz_answers`** - Individual student answers
+- **`quiz_results`** - Calculated quiz results and scores
+
+#### Future Collections
+
+- **`video_submissions`** - Video submissions (planned feature)
+- **`video_transcripts`** - Video transcripts (planned feature)
 
 ## 🚨 Troubleshooting
 
@@ -274,7 +379,7 @@ Set environment variable for debug logging:
 
 ```bash
 export DEBUG=true
-python start.py
+python run.py
 ```
 
 ## 📖 Documentation
