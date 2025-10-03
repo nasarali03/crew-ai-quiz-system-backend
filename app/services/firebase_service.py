@@ -13,7 +13,7 @@ class FirebaseService:
         self.db = db
     
     # Admin operations
-    async def create_admin(self, admin_data: Dict[str, Any]) -> Dict[str, Any]:
+    def create_admin(self, admin_data: Dict[str, Any]) -> Dict[str, Any]:
         """Create a new admin user"""
         admin_id = str(uuid.uuid4())
         admin_data.update({
@@ -25,14 +25,14 @@ class FirebaseService:
         self.db.collection('admins').document(admin_id).set(admin_data)
         return admin_data
     
-    async def get_admin_by_email(self, email: str) -> Optional[Dict[str, Any]]:
+    def get_admin_by_email(self, email: str) -> Optional[Dict[str, Any]]:
         """Get admin by email"""
         admins = self.db.collection('admins').where(filter=firestore.FieldFilter('email', '==', email)).limit(1).stream()
         for admin in admins:
             return admin.to_dict()
         return None
     
-    async def get_admin_by_id(self, admin_id: str) -> Optional[Dict[str, Any]]:
+    def get_admin_by_id(self, admin_id: str) -> Optional[Dict[str, Any]]:
         """Get admin by ID"""
         admin_doc = self.db.collection('admins').document(admin_id).get()
         if admin_doc.exists:

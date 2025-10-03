@@ -16,10 +16,10 @@ class AuthService:
     def get_password_hash(self, password: str) -> str:
         return pwd_context.hash(password)
 
-    async def create_admin(self, admin_data: AdminCreate) -> AdminResponse:
+    def create_admin(self, admin_data: AdminCreate) -> AdminResponse:
         """Create a new admin user"""
         # Check if admin already exists
-        existing_admin = await self.firebase_service.get_admin_by_email(admin_data.email)
+        existing_admin = self.firebase_service.get_admin_by_email(admin_data.email)
         if existing_admin:
             raise ValueError("Admin with this email already exists")
         
@@ -33,7 +33,7 @@ class AuthService:
             "name": admin_data.name
         }
         
-        admin = await self.firebase_service.create_admin(admin_dict)
+        admin = self.firebase_service.create_admin(admin_dict)
         
         return AdminResponse(
             id=admin['id'],
@@ -42,9 +42,9 @@ class AuthService:
             created_at=admin['created_at']
         )
 
-    async def authenticate_admin(self, email: str, password: str) -> Optional[AdminResponse]:
+    def authenticate_admin(self, email: str, password: str) -> Optional[AdminResponse]:
         """Authenticate admin with email and password"""
-        admin = await self.firebase_service.get_admin_by_email(email)
+        admin = self.firebase_service.get_admin_by_email(email)
         if not admin:
             return None
         
