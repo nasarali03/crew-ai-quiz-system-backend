@@ -83,10 +83,18 @@ async def read_admin_me(current_admin = Depends(get_current_admin)):
     return current_admin
 
 @router.post("/google", response_model=Token)
-async def google_login(google_token: str, db = Depends(get_db)):
+async def google_login(request: dict, db = Depends(get_db)):
     """Login with Google OAuth token"""
     try:
         import requests
+        
+        # Extract google_token from request body
+        google_token = request.get('google_token')
+        if not google_token:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Google token is required"
+            )
         
         # Verify Google token
         google_response = requests.get(
